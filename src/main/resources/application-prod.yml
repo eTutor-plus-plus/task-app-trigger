@@ -11,6 +11,8 @@ server:
 springdoc:
   api-docs:
     enabled: false
+  swagger-ui:
+      enabled: false
 
 # Spring
 spring:
@@ -21,11 +23,11 @@ spring:
 ## Database
 #spring:
 #  datasource:
-#    url: jdbc:postgresql://localhost:5434/etutor_binary_search
+#    url: jdbc:oracle:thin:@//localhost:1521/FREEPDB1
 #    username: etutor
 #    password: TBD
 #  flyway:
-#    user: etutor_binary_search_admin
+#    user: etutor_trigger_admin
 #    password: TBD
 #
 ## API key definition

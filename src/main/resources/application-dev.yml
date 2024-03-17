@@ -7,11 +7,14 @@ logging:
 # Data
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5434/etutor_binary_search
-    username: etutor_binary_search
-    password: secret
+    url: jdbc:oracle:thin:@//localhost:1521/FREEPDB1
+    username: etutor
+    password: etutor-secret
   jpa:
     show-sql: true
+  docker:
+    compose:
+      lifecycle-management: start-only
 
 # Springdoc
 springdoc:
