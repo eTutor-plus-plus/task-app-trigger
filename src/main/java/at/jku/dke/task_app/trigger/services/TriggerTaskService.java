@@ -8,10 +8,23 @@ import at.jku.dke.task_app.trigger.data.entities.TriggerTaskGroup;
 import at.jku.dke.task_app.trigger.data.repositories.TriggerTaskGroupRepository;
 import at.jku.dke.task_app.trigger.data.repositories.TriggerTaskRepository;
 import at.jku.dke.task_app.trigger.dto.ModifyTriggerTaskDto;
+import at.jku.dke.task_app.trigger.evaluation.Snapshot.BufferedSnapshots;
+import at.jku.dke.task_app.trigger.evaluation.Snapshot.Snapshot;
+import at.jku.dke.task_app.trigger.evaluation.TriggerDataSource;
+import org.apache.commons.lang3.EnumUtils;
 import org.springframework.context.MessageSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * This class provides methods for managing {@link TriggerTask}s.
@@ -19,26 +32,25 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class TriggerTaskService extends BaseTaskInGroupService<TriggerTask, TriggerTaskGroup, ModifyTriggerTaskDto> {
 
-    private final MessageSource messageSource;
-
     /**
      * Creates a new instance of class {@link TriggerTaskService}.
      *
      * @param repository          The task repository.
      * @param taskGroupRepository The task group repository.
-     * @param messageSource       The message source.
      */
-    public TriggerTaskService(TriggerTaskRepository repository, TriggerTaskGroupRepository taskGroupRepository, MessageSource messageSource) {
+    public TriggerTaskService(TriggerTaskRepository repository, TriggerTaskGroupRepository taskGroupRepository) {
         super(repository, taskGroupRepository);
-        this.messageSource = messageSource;
     }
 
     @Override
     protected TriggerTask createTask(long id, ModifyTaskDto<ModifyTriggerTaskDto> modifyTaskDto) {
         if (!modifyTaskDto.taskType().equals("trigger"))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid task type.");
-        // TODO: create task with data of data
-        return new TriggerTask();
+
+        TriggerTask task = new TriggerTask();
+        task.setId(id);
+        task = addProperties(task, modifyTaskDto);
+        return task;
     }
 
     @Override
@@ -46,11 +58,23 @@ public class TriggerTaskService extends BaseTaskInGroupService<TriggerTask, Trig
         if (!modifyTaskDto.taskType().equals("trigger"))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid task type.");
 
-        // TODO: update task properties with data of data
+        task = addProperties(task, modifyTaskDto);
     }
 
     @Override
     protected TaskModificationResponseDto mapToReturnData(TriggerTask task, boolean create) {
         return new TaskModificationResponseDto(null, null);
+    }
+
+    private TriggerTask addProperties(TriggerTask task, ModifyTaskDto<ModifyTriggerTaskDto> modifyTaskDto) {
+        task.setSolution(modifyTaskDto.additionalData().solution());
+        task.setTriggerOperations(modifyTaskDto.additionalData().triggerOperations());
+        task.setBuffered(modifyTaskDto.additionalData().buffered());
+        task.setComparisonExecution(modifyTaskDto.additionalData().comparisonExecution());
+        task.setWrongHeadPenalty(modifyTaskDto.additionalData().wrongHeadPenalty());
+        task.setWrongBodyPenalty(modifyTaskDto.additionalData().wrongBodyPenalty());
+        task.setResultTables(modifyTaskDto.additionalData().resultTables());
+        task.setTaskGroup(this.taskGroupRepository.getReferenceById(modifyTaskDto.taskGroupId()));
+        return task;
     }
 }

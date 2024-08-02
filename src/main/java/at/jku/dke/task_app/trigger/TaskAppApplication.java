@@ -1,18 +1,21 @@
 package at.jku.dke.task_app.trigger;
 
 import at.jku.dke.etutor.task_app.AppHelper;
+import at.jku.dke.task_app.trigger.config.JdbcConnectionParameters;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
 import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.core.env.Environment;
 
 /**
  * The main class of the application.
  */
 @SpringBootApplication(exclude = {SecurityAutoConfiguration.class, UserDetailsServiceAutoConfiguration.class})
+@ConfigurationPropertiesScan(basePackageClasses = JdbcConnectionParameters.class)
 public class TaskAppApplication {
 
     private static final Logger LOG = LoggerFactory.getLogger(TaskAppApplication.class);

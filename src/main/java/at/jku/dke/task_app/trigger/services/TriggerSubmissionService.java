@@ -33,8 +33,7 @@ public class TriggerSubmissionService extends BaseSubmissionService<TriggerTask,
 
     @Override
     protected TriggerSubmission createSubmissionEntity(SubmitSubmissionDto<TriggerSubmissionDto> submitSubmissionDto) {
-        // TODO: create submission with data from dto
-        return new TriggerSubmission();
+        return new TriggerSubmission(submitSubmissionDto.submission().input());
     }
 
     @Override
@@ -44,8 +43,6 @@ public class TriggerSubmissionService extends BaseSubmissionService<TriggerTask,
 
     @Override
     protected TriggerSubmissionDto mapSubmissionToSubmissionData(TriggerSubmission submission) {
-        // TODO: create DTO with data of submission
-        return new TriggerSubmissionDto("TODO");
+        return new TriggerSubmissionDto(submission.getSubmission());
     }
-
 }

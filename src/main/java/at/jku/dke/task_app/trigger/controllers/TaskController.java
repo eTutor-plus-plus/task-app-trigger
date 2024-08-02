@@ -5,7 +5,6 @@ import at.jku.dke.task_app.trigger.data.entities.TriggerTask;
 import at.jku.dke.task_app.trigger.dto.TriggerTaskDto;
 import at.jku.dke.task_app.trigger.dto.ModifyTriggerTaskDto;
 import at.jku.dke.task_app.trigger.services.TriggerTaskService;
-import org.apache.commons.lang3.NotImplementedException;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -25,8 +24,14 @@ public class TaskController extends BaseTaskController<TriggerTask, TriggerTaskD
 
     @Override
     protected TriggerTaskDto mapToDto(TriggerTask task) {
-        // TODO: return new TriggerTaskDto(task.getSolution());
-        throw new NotImplementedException();
+        return new TriggerTaskDto(
+            task.getSolution(),
+            task.getTriggerOperations(),
+            task.getResultTables(), 
+            task.isBuffered(),
+            task.isComparisonExecution(),
+            task.getWrongHeadPenalty(),
+            task.getWrongBodyPenalty()
+        );
     }
-
 }
