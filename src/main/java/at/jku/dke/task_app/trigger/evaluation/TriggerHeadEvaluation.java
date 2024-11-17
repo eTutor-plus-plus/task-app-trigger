@@ -7,9 +7,7 @@ import at.jku.dke.task_app.trigger.dto.TriggerSubmissionDto;
 import org.springframework.context.MessageSource;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -19,12 +17,12 @@ public class TriggerHeadEvaluation {
     private final SubmitSubmissionDto<TriggerSubmissionDto> submission;
     private final String solutionTrigger;
     private final String userTrigger;
-    private final List<CriterionDto> criterionDtos;
+    private Map<Integer, String> generalFeedBack;
+    private final Map<CriterionDto, Integer> criterionDtos;
     private final MessageSource messageSource;
-    private final int feedbackLevel;
     private final String mode;
     private final Locale locale;
-    private boolean parsable;
+    private boolean correct;
 
     public TriggerHeadEvaluation(SubmitSubmissionDto<TriggerSubmissionDto> submission, TriggerTask task, MessageSource messageSource) {
         if (submission.feedbackLevel() < 0 || submission.feedbackLevel() > 3) {
@@ -36,90 +34,104 @@ public class TriggerHeadEvaluation {
             this.locale = Locale.of(submission.language());
             this.solutionTrigger = task.getSolution();
             this.userTrigger = submission.submission().input();
-            this.criterionDtos = new ArrayList<>();
+            this.generalFeedBack = new HashMap<>();
+            this.criterionDtos = new HashMap<>();
             this.mode = submission.mode().name();
-            this.parsable = true;
-            this.feedbackLevel = mode.equals("SUBMIT") ? 0 : submission.feedbackLevel();
+            this.correct = true;
         }
     }
 
-    private List<String> parseTrigger(String triggerDefinition) {
+    private Map<Integer, String> checkTrigger(String triggerDefinition) {
         // Regular expression pattern to parse the trigger head
         String triggerPattern = "(?i)CREATE(?: OR REPLACE)? TRIGGER\\s+(\\w+)\\s+(BEFORE|AFTER|INSTEAD OF)\\s+(INSERT OR UPDATE|INSERT|UPDATE|DELETE)\\s+ON\\s+(\\w+)";
 
         // Compile the pattern
         Pattern pattern = Pattern.compile(triggerPattern);
-        Matcher matcher = pattern.matcher(triggerDefinition.strip());
-        List<String> result = new ArrayList<>();
+        Matcher matcher = pattern.matcher(triggerDefinition.strip().toUpperCase());
+        Map<Integer, String> result = new HashMap<>();
 
         if (matcher.find()) {
             // Extract components
-            result.add(matcher.group(1));
-            result.add(matcher.group(2));
-            result.add(matcher.group(3));
-            result.add(matcher.group(4));
+            result.put(1, matcher.group(1));
+            result.put(2, matcher.group(2));
+            result.put(3,matcher.group(3));
+            result.put(4, matcher.group(4));
         }
         return result;
     }
 
-    private void addCriteria(String criteria, int showAtFeedbackLevel) {
-        this.parsable = false;
-        if (showAtFeedbackLevel <= this.feedbackLevel) {
-            this.criterionDtos.add(new CriterionDto(
-                this.messageSource.getMessage("criteria.triggerHead", null, this.locale),
-                null,
-                false,
-                criteria));
-        }
+    private void addCriteria(String criteria, boolean passed, int showAtFeedbackLevel) {
+        this.criterionDtos.put(new CriterionDto(
+            this.messageSource.getMessage("criteria.triggerHead", null, this.locale),
+            null,
+            passed,
+            criteria), showAtFeedbackLevel);
     }
 
-    public boolean hasParsableHead() {
-        List<String> parsedSolution = parseTrigger(solutionTrigger);
-        List<String> parsedUser = parseTrigger(userTrigger);
+    public boolean analyze() {
+        Map<Integer, String> parsedSolution = checkTrigger(solutionTrigger);
+        Map<Integer, String> parsedUser = checkTrigger(userTrigger);
         Boolean result = true;
         if (parsedSolution.size() != parsedUser.size()) {
-            addCriteria(messageSource.getMessage("criteria.triggerHeadNotParsable", null, this.locale), 2);
+            addCriteria(messageSource.getMessage("criteria.triggerHeadNotOk", null, this.locale), false, 2);
             result = false;
-        } else {
-            for (int i = 0; i < parsedSolution.size(); i++) {
-                if (!parsedSolution.get(i).equals(parsedUser.get(i))) {
-                    result = false;
-                    switch (i) {
-                        case 0:
-                            addCriteria(messageSource.getMessage("criteria.triggerName", null, this.locale), 3);
-                            break;
-                        case 1:
-                            addCriteria(messageSource.getMessage("criteria.triggerTiming", null, this.locale), 3);
-                            break;
-                        case 2:
-                            addCriteria(messageSource.getMessage("criteria.triggerEvent", null, this.locale), 3);
-                            break;
-                        case 3:
-                            addCriteria(messageSource.getMessage("criteria.triggerTableName", null, this.locale), 3);
-                            break;
-                    }
+        }
+        for (int i = 1; i <= 4; i++) {
+            if (!parsedSolution.get(i).equals(parsedUser.get(i))) {
+                result = false;
+
+                switch (i) {
+                    case 1:
+                        addCriteria(messageSource.getMessage("criteria.triggerName", null, this.locale), false, 3);
+                        break;
+                    case 2:
+                        addCriteria(messageSource.getMessage("criteria.triggerTiming", null, this.locale), false, 3);
+                        break;
+                    case 3:
+                        addCriteria(messageSource.getMessage("criteria.triggerEvent", null, this.locale), false, 3);
+                        break;
+                    case 4:
+                        addCriteria(messageSource.getMessage("criteria.triggerTableName", null, this.locale), false, 3);
+                        break;
                 }
             }
         }
+        if (result) {
+            addCriteria(messageSource.getMessage("criteria.triggerHeadOk", null, this.locale), true,2);
+        } else {
+            addCriteria(messageSource.getMessage("criteria.triggerHeadNotOk", null, this.locale), false,2);
+        }
+        this.correct = result;
         return result;
     }
 
-    public List<CriterionDto> getCriteria() {
+    public boolean isCorrect() {
+        return correct;
+    }
+
+    public Map<CriterionDto, Integer> getCriteria() {
         return this.criterionDtos;
     }
 
-    public String getGeneralFeedback() {
-        if (!parsable) {
-            return this.messageSource.getMessage("criteria.triggerHeadNotParsable", null, this.locale);
-        } else
-            return this.messageSource.getMessage("criteria.triggerHeadParsable", null, this.locale);
+    public Map<Integer, String> getGeneralFeedback() {
+        if (!correct) {
+            generalFeedBack.put(1, this.messageSource.getMessage("incorrect", null, this.locale));
+            generalFeedBack.put(2, this.messageSource.getMessage("criteria.triggerHeadNotOk", null, this.locale));
+        } else {
+            generalFeedBack.put(2, this.messageSource.getMessage("criteria.triggerHeadOk", null, this.locale));
+        }
+        return this.generalFeedBack;
     }
 
     public BigDecimal getPoints() {
-        if (!parsable) {
+        if (!correct) {
             return task.getMaxPoints().add(task.getMaxPoints().multiply(task.getWrongHeadPenalty()));
         } else {
             return task.getMaxPoints();
         }
+    }
+
+    public TriggerTask getTask() {
+        return task;
     }
 }

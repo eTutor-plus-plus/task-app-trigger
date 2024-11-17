@@ -9,22 +9,9 @@ import at.jku.dke.task_app.trigger.data.repositories.TriggerTaskGroupRepository;
 import at.jku.dke.task_app.trigger.data.repositories.TriggerTaskRepository;
 import at.jku.dke.task_app.trigger.dto.ModifyTriggerTaskDto;
 import at.jku.dke.task_app.trigger.evaluation.Snapshot.BufferedSnapshots;
-import at.jku.dke.task_app.trigger.evaluation.Snapshot.Snapshot;
-import at.jku.dke.task_app.trigger.evaluation.TriggerDataSource;
-import org.apache.commons.lang3.EnumUtils;
-import org.springframework.context.MessageSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
-
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 /**
  * This class provides methods for managing {@link TriggerTask}s.
@@ -59,6 +46,7 @@ public class TriggerTaskService extends BaseTaskInGroupService<TriggerTask, Trig
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid task type.");
 
         task = addProperties(task, modifyTaskDto);
+        BufferedSnapshots.getInstance().removeByTaskId(task.getId());
     }
 
     @Override

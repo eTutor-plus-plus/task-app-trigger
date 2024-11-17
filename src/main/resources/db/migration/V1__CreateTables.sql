@@ -8,11 +8,12 @@ CREATE TABLE task_group
     submit_dml_statements   NCLOB           NOT NULL,
     schema_description      JSON,
     -- Database
-    schema_name             VARCHAR2 (200)  NOT NULL,
+    -- schema_name             VARCHAR2 (200)  NOT NULL,
     CONSTRAINT task_group_pk PRIMARY KEY (id),
     CONSTRAINT task_group_status_ck CHECK (status IN ('draft', 'ready_for_approval', 'approved'))
 );
 
+/*
 CREATE TABLE task_group_query
 (
     id            NUMBER(19, 0)     GENERATED ALWAYS AS IDENTITY,
@@ -23,6 +24,7 @@ CREATE TABLE task_group_query
     CONSTRAINT task_group_query_task_group_fk FOREIGN KEY (task_group_id) REFERENCES task_group (id)
         ON DELETE CASCADE
 );
+*/
 
 CREATE TABLE task
 (

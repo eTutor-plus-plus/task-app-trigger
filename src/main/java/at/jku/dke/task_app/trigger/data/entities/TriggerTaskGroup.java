@@ -23,9 +23,6 @@ public class TriggerTaskGroup extends BaseTaskGroup {
     @Column(name = "submit_dml_statements", nullable = false)
     private String submitDmlStatements;
 
-    @Column(name = "schema_name", nullable = false, length = 200)
-    private String schemaName;
-
     @Column(name = "schema_description")
     @JdbcTypeCode(SqlTypes.JSON)
     private SchemaInfoDto schemaDescription;
@@ -90,23 +87,6 @@ public class TriggerTaskGroup extends BaseTaskGroup {
         this.submitDmlStatements = submitDmlStatements;
     }
 
-    /**
-     * Gets the schema name.
-     *
-     * @return The schema name.
-     */
-    public String getSchemaName() {
-        return schemaName;
-    }
-
-    /**
-     * Sets the schema name.
-     *
-     * @param schemaName The schema name.
-     */
-    public void setSchemaName(String schemaName) {
-        this.schemaName = schemaName;
-    }
 
     /**
      * Gets the schema description.

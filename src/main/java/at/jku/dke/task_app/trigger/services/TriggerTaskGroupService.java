@@ -3,16 +3,16 @@ package at.jku.dke.task_app.trigger.services;
 import at.jku.dke.etutor.task_app.dto.ModifyTaskGroupDto;
 import at.jku.dke.etutor.task_app.dto.TaskGroupModificationResponseDto;
 import at.jku.dke.etutor.task_app.services.BaseTaskGroupService;
-import at.jku.dke.task_app.trigger.config.JdbcConnectionParameters;
 import at.jku.dke.task_app.trigger.data.entities.TriggerTaskGroup;
-import at.jku.dke.task_app.trigger.data.entities.TriggerTaskGroupQuery;
 import at.jku.dke.task_app.trigger.data.repositories.TriggerTaskGroupRepository;
-import at.jku.dke.task_app.trigger.data.repositories.TriggerTaskQueryGroupRepository;
 import at.jku.dke.task_app.trigger.dto.ModifyTriggerTaskGroupDto;
 import at.jku.dke.task_app.trigger.dto.SchemaInfoDto;
 import at.jku.dke.task_app.trigger.dto.TableDto;
+import at.jku.dke.task_app.trigger.evaluation.Snapshot.BufferedSnapshots;
 import jakarta.validation.ValidationException;
 import org.apache.logging.log4j.util.TriConsumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.MessageSource;
 import org.springframework.http.HttpStatus;
@@ -20,8 +20,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Locale;
 
 /**
@@ -30,9 +28,10 @@ import java.util.Locale;
 @Service
 public class TriggerTaskGroupService extends BaseTaskGroupService<TriggerTaskGroup, ModifyTriggerTaskGroupDto> {
 
+    private static final Logger LOG = LoggerFactory.getLogger(TriggerDataSourceService.class);
+
     private final MessageSource messageSource;
-    private final JdbcConnectionParameters jdbcConnectionParameters;
-    private final TriggerTaskQueryGroupRepository queryRepository;
+    private final TriggerDataSourceService triggerDataSourceService;
     private final String sqlUrl;
 
     /**
@@ -40,143 +39,47 @@ public class TriggerTaskGroupService extends BaseTaskGroupService<TriggerTaskGro
      *
      * @param repository               The task group repository.
      * @param messageSource            The message source.
-     * @param jdbcConnectionParameters The JDBC connection details.
-     * @param queryRepository          The task group query repository.
+     * @param triggerDataSourceService The trigger datasource service.
      * @param sqlUrl                   The public SQL url.
      */
-    public TriggerTaskGroupService(TriggerTaskGroupRepository repository, TriggerTaskQueryGroupRepository queryRepository,
-                                   MessageSource messageSource, JdbcConnectionParameters jdbcConnectionParameters,
+    public TriggerTaskGroupService(TriggerTaskGroupRepository repository,
+                                   MessageSource messageSource, TriggerDataSourceService triggerDataSourceService,
                                    @Value("${sql-url}") String sqlUrl) {
         super(repository);
         this.messageSource = messageSource;
-        this.jdbcConnectionParameters = jdbcConnectionParameters;
-        this.queryRepository = queryRepository;
+        this.triggerDataSourceService = triggerDataSourceService;
         this.sqlUrl = sqlUrl;
     }
 
-    /**
-     * Creates a new schema service.
-     *
-     * @return Schema service
-     * @throws SQLException If the connection cannot be established.
-     */
-    protected TriggerSchemaService createSchemaService() throws SQLException {
-        return new TriggerSchemaServiceImpl(this.jdbcConnectionParameters);
-    }
-
-    //#region --- CREATE ---
     @Override
     protected TriggerTaskGroup createTaskGroup(long id, ModifyTaskGroupDto<ModifyTriggerTaskGroupDto> modifyTaskGroupDto) {
-        if (!modifyTaskGroupDto.taskGroupType().equals("trigger"))
+        if (!modifyTaskGroupDto.taskGroupType().equals("trigger")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid task group type.");
-
+        }
         this.validateStatements(modifyTaskGroupDto);
 
         var taskGroup = new TriggerTaskGroup();
         taskGroup.setId(id);
-        taskGroup.setDdlStatements(modifyTaskGroupDto.additionalData().ddlStatements());
-        taskGroup.setDiagnoseDmlStatements(modifyTaskGroupDto.additionalData().diagnoseDmlStatements());
-        taskGroup.setSubmitDmlStatements(modifyTaskGroupDto.additionalData().submitDmlStatements());
-        taskGroup.setSchemaName(this.buildSchemaName(id));
+        setParameters(taskGroup, modifyTaskGroupDto);
         return taskGroup;
     }
 
-    protected void afterCreate(TriggerTaskGroup taskGroup, ModifyTaskGroupDto<ModifyTriggerTaskGroupDto> dto) {
-        try (var service = new TriggerSchemaServiceImpl(this.jdbcConnectionParameters)) {
-            var result = service.create(taskGroup.getSchemaName(), taskGroup.getDdlStatements(), taskGroup.getDiagnoseDmlStatements(), taskGroup.getSubmitDmlStatements());
-            result = this.createTaskGroupQueries(taskGroup, result);
-
-            taskGroup.setSchemaDescription(result);
-            this.repository.save(taskGroup);
-        } catch (SQLException ex) {
-            this.repository.delete(taskGroup);
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not create database tables for task group: " + ex.getMessage());
-        }
-    }
-
-    /**
-     * Creates task group queries for the specified schema info.
-     *
-     * @param taskGroup  The task group.
-     * @param schemaInfo The schema info.
-     * @return New schema info with task group queries.
-     */
-    private SchemaInfoDto createTaskGroupQueries(TriggerTaskGroup taskGroup, SchemaInfoDto schemaInfo) {
-        List<TableDto> tables = new ArrayList<>();
-
-        LOG.info("Creating task group queries for task group {}", taskGroup.getId());
-        for (var table : schemaInfo.tables()) {
-            var tgq = this.queryRepository.save(new TriggerTaskGroupQuery(taskGroup, table.name(), String.format("SELECT * FROM %s;", table.name())));
-            tables.add(new TableDto(table.name(), table.columns(), table.foreignKeys(), tgq.getId()));
-        }
-        return new SchemaInfoDto(tables);
-    }
-    //#endregion
-
-    //#region --- UPDATE ---
     @Override
     protected void updateTaskGroup(TriggerTaskGroup taskGroup, ModifyTaskGroupDto<ModifyTriggerTaskGroupDto> modifyTaskGroupDto) {
-        if (!modifyTaskGroupDto.taskGroupType().equals("trigger"))
+        if (!modifyTaskGroupDto.taskGroupType().equals("trigger")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid task group type.");
+        }
         this.validateStatements(modifyTaskGroupDto);
 
-        var dbDidNotChange = modifyTaskGroupDto.additionalData().ddlStatements().equals(taskGroup.getDdlStatements()) &&
+        boolean dbDidNotChange = modifyTaskGroupDto.additionalData().ddlStatements().equals(taskGroup.getDdlStatements()) &&
             modifyTaskGroupDto.additionalData().diagnoseDmlStatements().equals(taskGroup.getDiagnoseDmlStatements()) &&
             modifyTaskGroupDto.additionalData().submitDmlStatements().equals(taskGroup.getSubmitDmlStatements());
 
         if (!dbDidNotChange) {
-            try (var service = this.createSchemaService()) {
-                var result = service.create(taskGroup.getSchemaName(), modifyTaskGroupDto.additionalData().ddlStatements(),
-                    modifyTaskGroupDto.additionalData().diagnoseDmlStatements(), modifyTaskGroupDto.additionalData().submitDmlStatements());
-                result = this.updateTaskGroupQueries(taskGroup, result);
-                taskGroup.setSchemaDescription(result);
-            } catch (SQLException ex) {
-                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not update database tables for task group: " + ex.getMessage());
-            }
-        }
-
-        taskGroup.setDdlStatements(modifyTaskGroupDto.additionalData().ddlStatements());
-        taskGroup.setDiagnoseDmlStatements(modifyTaskGroupDto.additionalData().diagnoseDmlStatements());
-        taskGroup.setSubmitDmlStatements(modifyTaskGroupDto.additionalData().submitDmlStatements());
-    }
-
-    /**
-     * Updates task group queries for the specified schema info.
-     *
-     * @param taskGroup  The task group.
-     * @param schemaInfo The schema info.
-     * @return New schema info with task group queries.
-     */
-    private SchemaInfoDto updateTaskGroupQueries(TriggerTaskGroup taskGroup, SchemaInfoDto schemaInfo) {
-        List<TableDto> tables = new ArrayList<>();
-
-        for (var table : schemaInfo.tables()) {
-            var query = this.queryRepository.findByTableNameIgnoreCaseAndTaskGroup_Id(table.name(), taskGroup.getId())
-                .orElseGet(() -> this.queryRepository.save(new TriggerTaskGroupQuery(taskGroup, table.name(), String.format("SELECT * FROM %s;", table.name()))));
-            tables.add(new TableDto(table.name(), table.columns(), table.foreignKeys(), query.getId()));
-        }
-
-        this.queryRepository.deleteByTaskGroupAndIdNotIn(taskGroup, tables.stream().map(TableDto::queryId).toList());
-        return new SchemaInfoDto(tables);
-    }
-    //#endregion
-
-    //#region --- DELETE ---
-
-    @Override
-    protected void afterDelete(long id) {
-        final String schemaPrefix = buildSchemaName(id);
-        try (var service = this.createSchemaService()) {
-            service.deleteSchemas(schemaPrefix);
-            service.commit();
-        } catch (SQLException ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not delete database tables of task group: " + ex.getMessage());
+            BufferedSnapshots.getInstance().removeByGroupId(taskGroup.getId());
+            setParameters(taskGroup, modifyTaskGroupDto);
         }
     }
-
-    //#endregion
-
-    //#region --- DESCRIPTION ---
 
     private String generateSchemaDescription(TriggerTaskGroup taskGroup) {
         if (taskGroup.getSchemaDescription() == null)
@@ -233,25 +136,25 @@ public class TriggerTaskGroupService extends BaseTaskGroupService<TriggerTaskGro
         return sb.toString();
     }
 
-    //#endregion
+    private TriggerTaskGroup setParameters(TriggerTaskGroup taskGroup, ModifyTaskGroupDto<ModifyTriggerTaskGroupDto> modifyTaskGroupDto) {
+        taskGroup.setStatus(modifyTaskGroupDto.status());
+        taskGroup.setDdlStatements(modifyTaskGroupDto.additionalData().ddlStatements());
+        taskGroup.setDiagnoseDmlStatements(modifyTaskGroupDto.additionalData().diagnoseDmlStatements());
+        taskGroup.setSubmitDmlStatements(modifyTaskGroupDto.additionalData().submitDmlStatements());
+        TriggerExecutionService triggerExecutionService = new TriggerExecutionService(this.triggerDataSourceService);
+        SchemaInfoDto result = triggerExecutionService.getSchemaInfo(taskGroup.getDdlStatements());
+        taskGroup.setSchemaDescription(result);
+        this.repository.save(taskGroup);
+        return taskGroup;
+    }
 
     @Override
     protected TaskGroupModificationResponseDto mapToReturnData(TriggerTaskGroup taskGroup, boolean create) {
         var text = this.generateSchemaDescription(taskGroup);
-        TaskGroupModificationResponseDto result = new TaskGroupModificationResponseDto(
+        LOG.info(text);
+        return new TaskGroupModificationResponseDto(
             this.messageSource.getMessage("defaultTaskGroupDescription", new Object[]{text}, Locale.GERMAN),
             this.messageSource.getMessage("defaultTaskGroupDescription", new Object[]{text}, Locale.ENGLISH));
-        return result;
-    }
-
-    /**
-     * Builds the schema name for the specified identifier.
-     *
-     * @param id The task group identifier.
-     * @return The schema name.
-     */
-    public String buildSchemaName(long id) {
-        return "task_group_" + id;
     }
 
     /**

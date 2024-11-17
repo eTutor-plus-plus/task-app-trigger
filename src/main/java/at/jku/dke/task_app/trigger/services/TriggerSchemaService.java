@@ -1,101 +1,85 @@
 package at.jku.dke.task_app.trigger.services;
 
 import at.jku.dke.task_app.trigger.dto.SchemaInfoDto;
+import at.jku.dke.task_app.trigger.dto.TableDto;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
 
-import java.sql.SQLException;
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
 
-public interface TriggerSchemaService extends AutoCloseable {
+@Service
+public class TriggerSchemaService {
+    private static final Logger LOG = LoggerFactory.getLogger(TriggerSchemaService.class);
+
+    private final TriggerDataSourceService dataSource;
+
+    public TriggerSchemaService(TriggerDataSourceService dataSource) {
+        this.dataSource = dataSource;
+    }
 
     /**
-     * The suffix for the submission-schema.
-     */
-    String SUFFIX_SUBMISSION = "_submission";
-    /**
-     * The suffix for the diagnose-schema.
-     */
-    String SUFFIX_DIAGNOSE = "_diagnose";
-
-    /**
-     * Creates the schemas, tables and fills the tables with the specified DDL- and DML-statements.
+     * Gets information about the tables.
      *
-     * @param schemaPrefix The schema prefix.
-     * @param ddl          The DDL statements.
-     * @param dmlDiagnose  The DML statements for the diagnose-schema.
-     * @param dmlSubmit    The DML statements for the submission-schema.
-     * @return The created tables.
-     * @throws SQLException If the schemas, tables or data could not be created.
-     */
-    SchemaInfoDto create(String schemaPrefix, String ddl, String dmlDiagnose, String dmlSubmit) throws SQLException;
-
-    /**
-     * Gets information about the tables in the specified schema.
-     *
-     * @param schema The schema name.
+     * @param conn The database connection.
      * @return The schema information.
      * @throws SQLException If the information could not be retrieved.
      */
-    SchemaInfoDto getSchemaInfoDto(String schema) throws SQLException;
+    public SchemaInfoDto getSchemaInfoDto(Connection conn) throws SQLException {
+        List<TableDto> tables = new ArrayList<>();
+        ResultSet rsTables = conn.getMetaData().getTables(null, null, null, new String[]{"TABLE"});
+        while (rsTables.next()) {
+            String tableName = rsTables.getString("TABLE_NAME");
 
-    /**
-     * Creates the schemas with the specified prefix. Does not commit the transaction.
-     * <p>
-     * Uses the schema-prefix and creates the diagnose- and submission version of it.
-     *
-     * @param schemaPrefix The schema prefix.
-     * @throws SQLException If the schemas could not be created.
-     */
-    void createSchemas(String schemaPrefix) throws SQLException;
+            // load columns
+            List<TableDto.ColumnDto> columns = new ArrayList<>();
+            ResultSet rsColumns = conn.getMetaData().getColumns(null, null, tableName, null);
+            while (rsColumns.next()) {
+                String columnName = rsColumns.getString("COLUMN_NAME");
+                String columnType = rsColumns.getString("TYPE_NAME");
+                boolean nullable = rsColumns.getInt("NULLABLE") != DatabaseMetaData.columnNoNulls;
+                boolean pk = false;
 
-    /**
-     * Deletes the schemas with the specified prefix (if they exist). Does not commit the transaction.
-     * <p>
-     * Uses the schema-prefix and deletes the diagnose- and submission version of it.
-     *
-     * @param schemaPrefix The schema prefix.
-     * @throws SQLException If the schemas could not be deleted.
-     */
-    void deleteSchemas(String schemaPrefix) throws SQLException;
+                // load primary keys
+                ResultSet rsPk = conn.getMetaData().getPrimaryKeys(null, null, tableName);
+                while (rsPk.next()) {
+                    if (rsPk.getString("COLUMN_NAME").equals(rsColumns.getString("COLUMN_NAME"))) {
+                        pk = true;
+                        break;
+                    }
+                }
 
-    /**
-     * Creates the tables using the specified DDL-statements in the specified schema prefix.
-     * Executes in the diagnose- and submission-database.
-     * Grants SELECT permission to the executor.
-     * Does not commit the transaction.
-     *
-     * @param schemaPrefix  The schema prefix.
-     * @param ddlStatements The DDL statements.
-     * @throws SQLException If the tables could not be created.
-     */
-    void createTables(String schemaPrefix, String ddlStatements) throws SQLException;
+                // add column to list
+                columns.add(new TableDto.ColumnDto(columnName, columnType, nullable, pk));
+            }
 
-    /**
-     * Fills the schema tables using the specified DML-statements. Does not commit the transaction.
-     *
-     * @param schemaPrefix   The schema prefix.
-     * @param dmlStatements  The DML statements.
-     * @param diagnoseSchema {@code true} if the diagnose-schema should be filled; {@code false} if the submission-schema should be filled.
-     */
-    void fillTables(String schemaPrefix, String dmlStatements, boolean diagnoseSchema) throws SQLException;
+            // load foreign keys
+            List<TableDto.ForeignKeyDto> foreignKeys = new ArrayList<>();
+            ResultSet rsFk = conn.getMetaData().getImportedKeys(null, null, tableName);
+            while (rsFk.next()) {
+                String fkName = rsFk.getString("FK_NAME");
+                String fkTableName = rsFk.getString("FKTABLE_NAME");
+                String fkColumnName = rsFk.getString("FKCOLUMN_NAME");
+                String pkTableName = rsFk.getString("PKTABLE_NAME");
+                String pkColumnName = rsFk.getString("PKCOLUMN_NAME");
 
-    /**
-     * Commits the transaction.
-     *
-     * @throws SQLException If the commit failed.
-     */
-    void commit() throws SQLException;
+                var existing = foreignKeys.stream().filter(x -> x.name().equals(fkName)).findFirst();
+                if (existing.isEmpty())
+                    foreignKeys.add(new TableDto.ForeignKeyDto(fkName, fkTableName, new ArrayList<>() {{
+                        add(fkColumnName);
+                    }}, pkTableName, new ArrayList<>() {{
+                        add(pkColumnName);
+                    }}));
+                else {
+                    existing.get().columns().add(fkColumnName);
+                    existing.get().referencedColumns().add(pkColumnName);
+                }
+            }
 
-    /**
-     * Rolls back the transaction.
-     *
-     * @throws SQLException If the rollback failed.
-     */
-    void rollback() throws SQLException;
-
-    /**
-     * Rolls back the transaction and closes the connection.
-     *
-     * @throws SQLException If the rollback or the connection closing failed.
-     */
-    @Override
-    void close() throws SQLException;
+            tables.add(new TableDto(tableName, columns, foreignKeys, null));
+        }
+        return new SchemaInfoDto(tables);
+    }
 }

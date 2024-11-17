@@ -21,9 +21,9 @@ public class BufferedSnapshots {
         return instance;
     }
 
-    public Snapshot getSnapshotByTaskIdAndStatement(long taskId, String executionStatement) {
+    public Snapshot getSpecificSnapshot(long taskId, boolean diagnose, String executionStatement) {
         for (Snapshot snapshot : snapshotList) {
-            if (snapshot.getTaskId() == taskId && snapshot.getExecutionStatement().equals(executionStatement)) {
+            if (snapshot.getTaskId() == taskId && snapshot.isDiagnose() == diagnose && snapshot.getExecutionStatement().equals(executionStatement)) {
                 return snapshot;
             }
         }
@@ -31,10 +31,10 @@ public class BufferedSnapshots {
         return null;
     }
 
-    public List<Snapshot> getSnapshotsByTaskId(long taskId) {
+    public List<Snapshot> getSnapshotsByTaskIdAndMode(long taskId, boolean diagnose) {
         List<Snapshot> snapshots = new ArrayList<>();
         for (Snapshot snapshot : snapshotList) {
-            if (snapshot.getTaskId() == taskId) {
+            if (snapshot.getTaskId() == taskId && snapshot.isDiagnose() == diagnose) {
                 snapshots.add(snapshot);
             }
         }
@@ -49,6 +49,16 @@ public class BufferedSnapshots {
         snapshotList.remove(snapshot);
     }
 
+    public void removeByTaskIdAndMode(long taskId, boolean diagnose) {
+        Iterator<Snapshot> iterator = snapshotList.iterator();
+        while (iterator.hasNext()) {
+            Snapshot snapshot = iterator.next();
+            if (snapshot.getTaskId() == taskId && snapshot.isDiagnose() == diagnose) {
+                iterator.remove();
+            }
+        }
+    }
+
     public void removeByTaskId(long taskId) {
         Iterator<Snapshot> iterator = snapshotList.iterator();
         while (iterator.hasNext()) {
@@ -59,17 +69,27 @@ public class BufferedSnapshots {
         }
     }
 
+    public void removeByGroupId(long groupId) {
+        Iterator<Snapshot> iterator = snapshotList.iterator();
+        while (iterator.hasNext()) {
+            Snapshot snapshot = iterator.next();
+            if(snapshot.getTaskGroupId() == groupId) {
+                iterator.remove();
+            }
+        }
+    }
+
     public void removeAll() {
         snapshotList.clear();
     }
 
-    public List<Snapshot> getSnapshotList() {
+    public List<Snapshot> getAllSnapshots() {
         return snapshotList;
     }
 
-    public boolean containsTask(long taskId) {
+    public boolean containsTask(long taskId, boolean diagnose) {
         for (Snapshot snapshot : snapshotList) {
-            if (snapshot.getTaskId() == taskId) {
+            if (snapshot.getTaskId() == taskId && snapshot.isDiagnose() == diagnose) {
                 return true;
             }
         }
