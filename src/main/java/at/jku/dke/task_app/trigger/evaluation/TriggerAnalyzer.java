@@ -180,6 +180,10 @@ public class TriggerAnalyzer {
     }
 
     public BigDecimal getPoints() {
-        return this.points;
+        if(this.feedBackLevel > 0) {
+            return this.points;
+        } else {
+            return null;
+        }
     }
 }
