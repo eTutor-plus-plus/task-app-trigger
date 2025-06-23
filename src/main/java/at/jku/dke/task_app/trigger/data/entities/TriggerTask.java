@@ -22,6 +22,9 @@ public class TriggerTask extends BaseTaskInGroup<TriggerTaskGroup> {
     @Column(name = "result_Tables", nullable = false)
     private String resultTables;
 
+    @Column(name = "timing_Independent", nullable = false)
+    private boolean timingIndependent;
+
     @Column(name = "buffered", nullable = false)
     private boolean buffered;
 
@@ -92,6 +95,24 @@ public class TriggerTask extends BaseTaskInGroup<TriggerTaskGroup> {
      */
     public String getResultTables() {
         return resultTables;
+    }
+
+    /**
+     * Gets the execution type.
+     *
+     * @return The execution type.
+     */
+    public boolean isTimingIndependent() {
+        return timingIndependent;
+    }
+
+    /**
+     * Sets the execution type.
+     *
+     * @param timingIndependent The execution type.
+     */
+    public void setTimingIndependent(boolean timingIndependent) {
+        this.timingIndependent = timingIndependent;
     }
 
     /**

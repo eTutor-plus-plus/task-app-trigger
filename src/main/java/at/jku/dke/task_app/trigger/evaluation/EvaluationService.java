@@ -37,7 +37,7 @@ public class EvaluationService {
      *
      * @param taskRepository    The task repository.
      * @param messageSource     The message source.
-     * @param triggerDataSourceService The datsource.
+     * @param triggerDataSourceService The datasource.
      */
     public EvaluationService(TriggerTaskRepository taskRepository, MessageSource messageSource, TriggerDataSourceService triggerDataSourceService) {
         this.taskRepository = taskRepository;
@@ -67,7 +67,6 @@ public class EvaluationService {
         LOG.info("Evaluating input for task {} with mode {} and feedback-level {}", submission.taskId(), submission.mode(), submission.feedbackLevel());
 
         String mode = submission.mode().name();
-        int feedbackLevel = submission.feedbackLevel();
         TriggerExecutionService triggerExecutionService = new TriggerExecutionService(this.triggerDataSourceService);
         ExecutionResult executionResult;
         List<Snapshot> taskSolutionExecution = new ArrayList<>();
@@ -78,8 +77,14 @@ public class EvaluationService {
                 //execute trigger to check syntax
                 executionResult = triggerExecutionService.executeUserSubmission(task, submission, true);
                 // return syntax error if present
-                if (executionResult.isSuccsfull()) {
+                if (!executionResult.isSyntaxError()) {
                     generalFeedback = messageSource.getMessage("noSyntaxError", null, locale);
+                    criterionDtoList.add( new CriterionDto(
+                        messageSource.getMessage("criterium.syntax", null, locale),
+                        null,
+                        true,
+                        messageSource.getMessage("criterium.syntax.valid",  null, locale)
+                    ));
                 } else {
                     generalFeedback = messageSource.getMessage("syntaxError", null, locale);
                     generalFeedback = generalFeedback + "\n" + executionResult.getExecutionMessage();
@@ -108,7 +113,7 @@ public class EvaluationService {
                 //analyze trigger head
                 triggerHeadEvaluation = new TriggerHeadEvaluation(submission, task, messageSource);
                 triggerHeadEvaluation.analyze();
-                //execute user submission
+                //execute trigger
                 executionResult = triggerExecutionService.executeUserSubmission(task, submission, true);
                 //analyze trigger execution
                 triggerAnalyzer = new TriggerAnalyzer(submission, messageSource, taskSolutionExecution, task.getMaxPoints(), executionResult, triggerHeadEvaluation);
@@ -119,7 +124,6 @@ public class EvaluationService {
                 points = triggerAnalyzer.getPoints();
                 break;
             case "SUBMIT":
-                //TODO: submit mit run abstimmen
                 if (task.isBuffered()) {
                     //check if execution is already present
                     if (BufferedSnapshots.getInstance().containsTask(taskId, false)) {
@@ -133,7 +137,7 @@ public class EvaluationService {
                     executionResult = triggerExecutionService.executeTask(task, false);
                     taskSolutionExecution = executionResult.getExecutionResult();
                 }
-                //execute user submission
+                //analyze trigger head
                 triggerHeadEvaluation = new TriggerHeadEvaluation(submission, task, messageSource);
                 triggerHeadEvaluation.analyze();
                 //execute trigger
@@ -141,6 +145,10 @@ public class EvaluationService {
                 //analyze trigger execution
                 triggerAnalyzer = new TriggerAnalyzer(submission, messageSource, taskSolutionExecution, task.getMaxPoints(), executionResult, triggerHeadEvaluation);
                 triggerAnalyzer.analyze();
+                //generate feedback
+                generalFeedback = triggerAnalyzer.getGeneralFeedback();
+                criterionDtoList = triggerAnalyzer.getCriteria();
+                points = triggerAnalyzer.getPoints();
                 break;
         }
 

@@ -17,12 +17,11 @@ public class TriggerHeadEvaluation {
     private final SubmitSubmissionDto<TriggerSubmissionDto> submission;
     private final String solutionTrigger;
     private final String userTrigger;
-    private Map<Integer, String> generalFeedBack;
     private final Map<CriterionDto, Integer> criterionDtos;
     private final MessageSource messageSource;
     private final String mode;
     private final Locale locale;
-    private boolean correct;
+    private boolean headPenalty;
 
     public TriggerHeadEvaluation(SubmitSubmissionDto<TriggerSubmissionDto> submission, TriggerTask task, MessageSource messageSource) {
         if (submission.feedbackLevel() < 0 || submission.feedbackLevel() > 3) {
@@ -34,101 +33,112 @@ public class TriggerHeadEvaluation {
             this.locale = Locale.of(submission.language());
             this.solutionTrigger = task.getSolution();
             this.userTrigger = submission.submission().input();
-            this.generalFeedBack = new HashMap<>();
             this.criterionDtos = new HashMap<>();
             this.mode = submission.mode().name();
-            this.correct = true;
+            this.headPenalty = false;
         }
     }
 
-    private Map<Integer, String> checkTrigger(String triggerDefinition) {
+    private Map<String, String> checkTrigger(String triggerDefinition) {
         // Regular expression pattern to parse the trigger head
-        String triggerPattern = "(?i)CREATE(?: OR REPLACE)? TRIGGER\\s+(\\w+)\\s+(BEFORE|AFTER|INSTEAD OF)\\s+(INSERT OR UPDATE|INSERT|UPDATE|DELETE)\\s+ON\\s+(\\w+)";
+        String triggerPattern = "(?i)CREATE(?: OR REPLACE)? TRIGGER\\s+(\\w+)\\s+(BEFORE|AFTER|INSTEAD OF)\\s+((?:INSERT|UPDATE(?: OF [\\w, ]+)?|DELETE)(?: OR (?:INSERT|UPDATE(?: OF [\\w, ]+)?|DELETE))*)\\s+ON\\s+(\\w+)";
 
         // Compile the pattern
         Pattern pattern = Pattern.compile(triggerPattern);
         Matcher matcher = pattern.matcher(triggerDefinition.strip().toUpperCase());
-        Map<Integer, String> result = new HashMap<>();
+        Map<String, String> result = new HashMap<>();
 
         if (matcher.find()) {
-            // Extract components
-            result.put(1, matcher.group(1));
-            result.put(2, matcher.group(2));
-            result.put(3,matcher.group(3));
-            result.put(4, matcher.group(4));
+            // Extract components, all parts are present
+            result.put(messageSource.getMessage("criteria.triggerName", null, this.locale), matcher.group(1));
+            result.put(messageSource.getMessage("criteria.triggerTiming", null, this.locale), matcher.group(2));
+            result.put(messageSource.getMessage("criteria.triggerEvent", null, this.locale), matcher.group(3));
+            result.put(messageSource.getMessage("criteria.triggerTableName", null, this.locale), matcher.group(4));
+        } else {
+            // Some trigger parts are missing
+            // Check for trigger name
+            headPenalty = true;
+            Pattern namePattern = Pattern.compile("(?:^|\\s)CREATE(?: OR REPLACE)? TRIGGER (\\w+)");
+            Matcher nameMatcher = namePattern.matcher(triggerDefinition);
+            if (nameMatcher.find()) {
+                result.put(messageSource.getMessage("criteria.triggerName", null, this.locale), nameMatcher.group(1));
+            } else {
+                result.put(messageSource.getMessage("criteria.triggerName", null, this.locale), "NOT OK");
+            }
+
+            // Check for timing (BEFORE, AFTER, INSTEAD OF)
+            Pattern timingPattern = Pattern.compile("(?:^|\\s)(BEFORE|AFTER|INSTEAD OF) ");
+            Matcher timingMatcher = timingPattern.matcher(triggerDefinition);
+            if (timingMatcher.find()) {
+                result.put(messageSource.getMessage("criteria.triggerTiming", null, this.locale), timingMatcher.group(1));
+            } else {
+                result.put(messageSource.getMessage("criteria.triggerTiming", null, this.locale), "NOT OK");
+            }
+
+            // Check for event (INSERT, UPDATE, DELETE, INSERT OR UPDATE)
+            Pattern eventPattern = Pattern.compile("(?:^|\\s)(INSERT OR UPDATE|INSERT|UPDATE|DELETE) ");
+            Matcher eventMatcher = eventPattern.matcher(triggerDefinition);
+            if (eventMatcher.find()) {
+                result.put(messageSource.getMessage("criteria.triggerEvent", null, this.locale), eventMatcher.group(1));
+            } else {
+                result.put(messageSource.getMessage("criteria.triggerEvent", null, this.locale), "NOT OK");
+            }
+
+            // Check for table name (ON <table>)
+            Pattern tablePattern = Pattern.compile("(ON|UPDATE OF) (\\w+)");
+            Matcher tableMatcher = tablePattern.matcher(triggerDefinition);
+            if (tableMatcher.find()) {
+                result.put(messageSource.getMessage("criteria.triggerTableName", null, this.locale), tableMatcher.group(1));
+            } else {
+                result.put(messageSource.getMessage("criteria.triggerTableName", null, this.locale), "NOT OK");
+            }
+
         }
         return result;
     }
 
-    private void addCriteria(String criteria, boolean passed, int showAtFeedbackLevel) {
-        this.criterionDtos.put(new CriterionDto(
-            this.messageSource.getMessage("criteria.triggerHead", null, this.locale),
-            null,
-            passed,
-            criteria), showAtFeedbackLevel);
+    private void addCriteria(BigDecimal points, boolean passed, String criteria, int showAtFeedbackLevel) {
+        String name = messageSource.getMessage("criteria.triggerHead", null, this.locale);
+        criterionDtos.put(new CriterionDto(name, points, passed, criteria), showAtFeedbackLevel);
     }
 
-    public boolean analyze() {
-        Map<Integer, String> parsedSolution = checkTrigger(solutionTrigger);
-        Map<Integer, String> parsedUser = checkTrigger(userTrigger);
-        Boolean result = true;
-        if (parsedSolution.size() != parsedUser.size()) {
-            addCriteria(messageSource.getMessage("criteria.triggerHeadNotOk", null, this.locale), false, 2);
-            result = false;
-        }
-        for (int i = 1; i <= 4; i++) {
-            if (!parsedSolution.get(i).equals(parsedUser.get(i))) {
-                result = false;
+    public void analyze() {
+        Map<String, String> parsedSolution = checkTrigger(solutionTrigger.toUpperCase().strip());
+        Map<String, String> parsedUser = checkTrigger(userTrigger.toUpperCase().strip());
 
-                switch (i) {
-                    case 1:
-                        addCriteria(messageSource.getMessage("criteria.triggerName", null, this.locale), false, 3);
-                        break;
-                    case 2:
-                        addCriteria(messageSource.getMessage("criteria.triggerTiming", null, this.locale), false, 3);
-                        break;
-                    case 3:
-                        addCriteria(messageSource.getMessage("criteria.triggerEvent", null, this.locale), false, 3);
-                        break;
-                    case 4:
-                        addCriteria(messageSource.getMessage("criteria.triggerTableName", null, this.locale), false, 3);
-                        break;
+        for (Map.Entry<String, String> entry : parsedUser.entrySet()) {
+            //ignore trigger name
+            if(!entry.getKey().equals(messageSource.getMessage("criteria.triggerName", null, this.locale))) {
+                if (!entry.getValue().equals(parsedSolution.get(entry.getKey()))) {
+                    if (entry.getKey().equals(messageSource.getMessage("criteria.triggerTiming", null, this.locale)) && task.isTimingIndependent()) {
+                        //special handling timing independent tasks
+                        if (!((entry.getValue().equals("BEFORE") || entry.getValue().equals("AFTER")) &&
+                            (parsedSolution.get(entry.getKey()).equals("BEFORE") || parsedSolution.get(entry.getKey()).equals("AFTER")))) {
+                            //event of submission or solution is neither BEFORE nor AFTER
+                            addCriteria(null, false, entry.getKey(), 3);
+                            this.headPenalty = true;
+                        }
+                    } else {
+                        addCriteria(null, false, entry.getKey(), 3);
+                        this.headPenalty = true;
+                    }
                 }
             }
+
         }
-        if (result) {
-            addCriteria(messageSource.getMessage("criteria.triggerHeadOk", null, this.locale), true,2);
+    }
+
+    public boolean isHeadPenalty() {
+        return headPenalty;
+    }
+
+    public Map<CriterionDto, Integer> getCriterionDtos() {
+        if (headPenalty) {
+            addCriteria(task.getMaxPoints().multiply(task.getWrongHeadPenalty()), false, messageSource.getMessage("criteria.triggerHeadNotOk", null, this.locale), 2);
         } else {
-            addCriteria(messageSource.getMessage("criteria.triggerHeadNotOk", null, this.locale), false,2);
+            addCriteria(null, true, messageSource.getMessage("criteria.triggerHeadOk", null, this.locale), 2);
         }
-        this.correct = result;
-        return result;
-    }
-
-    public boolean isCorrect() {
-        return correct;
-    }
-
-    public Map<CriterionDto, Integer> getCriteria() {
-        return this.criterionDtos;
-    }
-
-    public Map<Integer, String> getGeneralFeedback() {
-        if (!correct) {
-            generalFeedBack.put(1, this.messageSource.getMessage("incorrect", null, this.locale));
-            generalFeedBack.put(2, this.messageSource.getMessage("criteria.triggerHeadNotOk", null, this.locale));
-        } else {
-            generalFeedBack.put(2, this.messageSource.getMessage("criteria.triggerHeadOk", null, this.locale));
-        }
-        return this.generalFeedBack;
-    }
-
-    public BigDecimal getPoints() {
-        if (!correct) {
-            return task.getMaxPoints().add(task.getMaxPoints().multiply(task.getWrongHeadPenalty()));
-        } else {
-            return task.getMaxPoints();
-        }
+        return criterionDtos;
     }
 
     public TriggerTask getTask() {

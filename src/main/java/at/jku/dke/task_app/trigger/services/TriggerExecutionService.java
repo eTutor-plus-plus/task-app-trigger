@@ -2,7 +2,6 @@ package at.jku.dke.task_app.trigger.services;
 
 import at.jku.dke.etutor.task_app.dto.SubmitSubmissionDto;
 import at.jku.dke.task_app.trigger.config.TriggerDatasource;
-import at.jku.dke.task_app.trigger.data.entities.TriggerSubmission;
 import at.jku.dke.task_app.trigger.data.entities.TriggerTask;
 import at.jku.dke.task_app.trigger.dto.SchemaInfoDto;
 import at.jku.dke.task_app.trigger.dto.TableDto;
@@ -16,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.sql.*;
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
@@ -109,13 +109,13 @@ public class TriggerExecutionService {
 
                     tables.add(new TableDto(tableName, columns, foreignKeys, null));
                 }
-                dataSource.clear(triggerDatasource, true, false);
+                dataSource.clear(triggerDatasource, true);
                 return new SchemaInfoDto(tables);
             }
-        }catch (SQLException ex) {
-                LOG.error("Error when executing the trigger {}", ex.getMessage());
-                //firmly clear the database, possible malicious user execution caused an error
-                dataSource.clear(triggerDatasource, true, true);
+        } catch (SQLException ex) {
+            LOG.error("Error when executing the trigger {}", ex.getMessage());
+            //firmly clear the database, possible malicious user execution caused an error
+            dataSource.clear(triggerDatasource, true);
         }
         return null;
     }
@@ -182,11 +182,22 @@ public class TriggerExecutionService {
                 statement.execute("COMMIT");
 
                 //Run schema init statements
-                String initStatments = initStm.strip();
-                for (String diagnoseStatement : initStatments.split(";")) {
+                String initStatements = initStm.strip();
+                for (String diagnoseStatement : initStatements.split(";")) {
                     statement.execute(diagnoseStatement);
                 }
                 statement.execute("COMMIT");
+
+                String[] resultTables = executeOn.strip().split(";");
+
+                Map<String, List<String>> tableHeaders = new HashMap<>();
+                Map<String, List<List<String>>> initialStates = new HashMap<>();
+                if(userSubmission) {
+                    for (String resultTable : resultTables) {
+                        tableHeaders.put(resultTable, getTableHeader(statement, resultTable));
+                        initialStates.put(resultTable, getConvertedResultSet(statement, resultTable));
+                    }
+                }
 
                 //Create Trigger
                 String createTriggerStatements = createStm.strip();
@@ -198,7 +209,6 @@ public class TriggerExecutionService {
                 if (withStatements) {
                     //Execute Trigger
                     String executeTriggerStatements = executeStm.strip();
-                    String[] resultTables = executeOn.strip().split(";");
                     for (String executeTriggerStatement : executeTriggerStatements.split(";")) {
                         statement.execute(executeTriggerStatement);
                         if (comparisonExecution) {
@@ -220,16 +230,51 @@ public class TriggerExecutionService {
                         executionResult.add(new Snapshot(taskGroupId, taskId, diagnose, executeTriggerStatements, tables));
                     }
                 }
-                dataSource.clear(triggerDatasource, diagnose, userSubmission);
-                result=  new ExecutionResult(true, "", executionResult);
+                Map<String, List<List<String>>> modifiedStates = new HashMap<>();
+                if (userSubmission) {
+                    for(String resultTable : resultTables) {
+                        modifiedStates.put(resultTable, getConvertedResultSet(statement, resultTable));
+                    }
+                }
+
+                dataSource.clear(triggerDatasource, diagnose);
+                result = new ExecutionResult(true, false, "", executionResult, initialStates, tableHeaders, modifiedStates);
             }
         } catch (SQLException ex) {
             LOG.error("Error when executing the trigger {}", ex.getMessage());
-            //firmly clear the database, possible malicious user execution caused an error
-            dataSource.clear(triggerDatasource, diagnose, true);
-            result = new ExecutionResult(false, ex.getMessage(), null);
+
+            // Check if the exception is a syntax error, starting with "42"
+            String sqlState = ex.getSQLState();
+            boolean isSyntaxError = sqlState != null && sqlState.startsWith("42");
+
+            // firmly clear the database, possible malicious user execution caused an error
+            dataSource.clear(triggerDatasource, diagnose);
+            result = new ExecutionResult(false, isSyntaxError, ex.getMessage(), null, null, null, null);
         }
         return result;
+    }
+
+    /**
+     * Return the table header (column names) as a list.
+     *
+     * @param statement Statement
+     * @param tableName String
+     * @return List<String> where the first (and only) row contains column names
+     */
+    private List<String> getTableHeader(Statement statement, String tableName) throws SQLException {
+        // Query to fetch metadata without returning full table
+        String query = "SELECT * FROM " + tableName + " WHERE ROWNUM = 1";
+        ResultSet resultSet = statement.executeQuery(query);
+        ResultSetMetaData metaData = resultSet.getMetaData();
+
+        int columnCount = metaData.getColumnCount();
+        List<String> tableHeader = new ArrayList<>();
+
+        for (int i = 1; i <= columnCount; i++) {
+            tableHeader.add(metaData.getColumnName(i));
+        }
+
+        return tableHeader;
     }
 
     /**
@@ -251,15 +296,15 @@ public class TriggerExecutionService {
         int columnCount = metaData.getColumnCount();
 
         // Build the SQL query to sort by the first and second columns (if exists)
-        String finalQuerry = "SELECT * FROM " + tableName + " ORDER BY ";
+        String finalQuery = "SELECT * FROM " + tableName + " ORDER BY ";
         if (columnCount >= 1) {
-            finalQuerry = finalQuerry + metaData.getColumnName(1) + " ASC";  // Sort by the first column
+            finalQuery = finalQuery + metaData.getColumnName(1) + " ASC";  // Sort by the first column
         }
         if (columnCount >= 2) {
-            finalQuerry = finalQuerry + ", " + metaData.getColumnName(2) + " ASC";  // Sort by the second column if it exists
+            finalQuery = finalQuery + ", " + metaData.getColumnName(2) + " ASC";  // Sort by the second column if it exists
         }
         //Execute final query
-        ResultSet rs = statement.executeQuery(finalQuerry);
+        ResultSet rs = statement.executeQuery(finalQuery);
 
         //Convert table to 2D list
         List<List<String>> result = new ArrayList<>();
@@ -274,7 +319,7 @@ public class TriggerExecutionService {
             List<String> oneLine = new ArrayList<>();
             for (int i = 1; i <= colCount; i++) {
                 String cell = rs.getString(i);
-                if(cell == null) {
+                if (cell == null) {
                     oneLine.add("NULL");
                 } else {
                     oneLine.add(cell);

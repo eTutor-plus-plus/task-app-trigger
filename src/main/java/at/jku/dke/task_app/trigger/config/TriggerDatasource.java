@@ -11,6 +11,10 @@ public class TriggerDatasource implements AutoCloseable {
         this.lock = false;
     }
 
+    public void setDataSource(HikariDataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
     public HikariDataSource getDataSource() {
         return dataSource;
     }

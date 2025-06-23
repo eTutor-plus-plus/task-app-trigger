@@ -85,56 +85,54 @@ public class TriggerTaskGroupService extends BaseTaskGroupService<TriggerTaskGro
         if (taskGroup.getSchemaDescription() == null)
             return "";
 
-        // Parse schema info
         SchemaInfoDto dto = taskGroup.getSchemaDescription();
 
-        // Build
         StringBuilder sb = new StringBuilder("<div style=\"font-family: monospace;\">");
-        TriConsumer<StringBuilder, TableDto, String> colFunc = (s, table, col) -> {
-            boolean isFk = table.foreignKeys().stream().anyMatch(f -> f.columns().contains(col));
-            if (isFk)
-                s.append("<i>");
-            s.append(col);
-            if (isFk)
-                s.append("</i>");
-            s.append(", ");
-        };
 
         // Tables
         for (var table : dto.tables()) {
-            sb.append("<a target=\"_blank\" href=\"");
-            sb.append(this.sqlUrl).append(table.queryId()).append("\">").append(table.name()).append("</a> (");
+            sb.append("<a target=\"_blank\" href=\"")
+                .append(this.sqlUrl).append(table.queryId() != null ? table.queryId() : "")
+                .append("\">").append(table.name().toUpperCase()).append("</a> (");
 
-            // PK columns
-            sb.append("<u>");
-            table.columns().stream().filter(TableDto.ColumnDto::primaryKey).forEach(x -> colFunc.accept(sb, table, x.name()));
-            sb.deleteCharAt(sb.length() - 1);
-            sb.deleteCharAt(sb.length() - 1);
-            sb.append("</u>");
-            if (table.columns().stream().anyMatch(x -> !x.primaryKey()))
+            for (var col : table.columns()) {
+                boolean isPk = col.primaryKey();
+                boolean isFk = table.foreignKeys().stream().anyMatch(f -> f.columns().contains(col.name()));
+
+                if (isPk) sb.append("<u>");
+                if (isFk) sb.append("<i>");
+
+                sb.append(col.name());
+
+                if (isFk) sb.append("</i>");
+                if (isPk) sb.append("</u>");
+
                 sb.append(", ");
+            }
 
-            // Other columns
-            table.columns().stream().filter(x -> !x.primaryKey()).forEach(x -> colFunc.accept(sb, table, x.name()));
+            // Remove last comma and space
+            if (sb.length() >= 2)
+                sb.setLength(sb.length() - 2);
 
-            // Remove last comma
-            sb.deleteCharAt(sb.length() - 1);
-            sb.deleteCharAt(sb.length() - 1);
             sb.append(")<br>");
         }
+
         sb.append("<br>");
 
-        // Inclusions
+        // Inclusions (foreign key relationships)
         for (var table : dto.tables()) {
             for (var fk : table.foreignKeys()) {
-                sb.append(fk.table()).append('(').append(String.join(", ", fk.columns())).append(") ⊆ ");
-                sb.append(fk.referencedTable()).append('(').append(String.join(", ", fk.referencedColumns())).append(") <br>");
+                sb.append(table.name().toUpperCase())
+                    .append('(').append(String.join(", ", fk.columns())).append(") ⊆ ")
+                    .append(fk.referencedTable().toUpperCase())
+                    .append('(').append(String.join(", ", fk.referencedColumns())).append(") <br>");
             }
         }
 
         sb.append("</div>");
         return sb.toString();
     }
+
 
     private TriggerTaskGroup setParameters(TriggerTaskGroup taskGroup, ModifyTaskGroupDto<ModifyTriggerTaskGroupDto> modifyTaskGroupDto) {
         taskGroup.setStatus(modifyTaskGroupDto.status());

@@ -27,7 +27,8 @@ public class TaskController extends BaseTaskController<TriggerTask, TriggerTaskD
         return new TriggerTaskDto(
             task.getSolution(),
             task.getTriggerOperations(),
-            task.getResultTables(), 
+            task.getResultTables(),
+            task.isTimingIndependent(),
             task.isBuffered(),
             task.isComparisonExecution(),
             task.getWrongHeadPenalty(),

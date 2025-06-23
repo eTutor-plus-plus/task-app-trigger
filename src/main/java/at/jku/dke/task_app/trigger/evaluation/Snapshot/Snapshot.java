@@ -18,21 +18,13 @@ public class Snapshot {
         this.tablesSnapshot = tablesSnapshot;
     }
 
-    public long getTaskGroupId() {
-        return taskGroupId;
-    }
+    public long getTaskGroupId() { return taskGroupId; }
 
-    public void setTaskGroupId(long taskGroupId) {
-        this.taskGroupId = taskGroupId;
-    }
+    public void setTaskGroupId(long taskGroupId) { this.taskGroupId = taskGroupId; }
 
-    public boolean isDiagnose() {
-        return diagnose;
-    }
+    public boolean isDiagnose() { return diagnose; }
 
-    public void setDiagnose(boolean diagnose) {
-        this.diagnose = diagnose;
-    }
+    public void setDiagnose(boolean diagnose) { this.diagnose = diagnose; }
 
     public long getTaskId() {
         return taskId;
@@ -50,9 +42,7 @@ public class Snapshot {
         this.executionStatement = executionStatement;
     }
 
-    public Map<String, List<List<String>>> getTablesSnapshot() {
-        return tablesSnapshot;
-    }
+    public Map<String, List<List<String>>> getTablesSnapshot() { return tablesSnapshot; }
 
     public void setTablesSnapshot(Map<String, List<List<String>>> tablesSnapshot) {
         this.tablesSnapshot = tablesSnapshot;

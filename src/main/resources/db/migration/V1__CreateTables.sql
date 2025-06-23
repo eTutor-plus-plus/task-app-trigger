@@ -36,6 +36,7 @@ CREATE TABLE task
     solution            NCLOB           NOT NULL,
     trigger_Operations  NCLOB           NOT NULL,
     result_Tables       VARCHAR2(255)   NOT NULL,
+    timing_Independent   VARCHAR2 (10)   NOT NULL,
     buffered            VARCHAR2 (10)   NOT NULL,
     comparison_Execution VARCHAR2 (10)   NOT NULL,
     wrong_Head_Penalty    NUMERIC(5, 2)   DEFAULT -1, -- -1 = solution is fully invalid
@@ -57,7 +58,7 @@ CREATE TABLE submission
     "MODE"            VARCHAR2(8)                 NOT NULL,
     feedback_level    INT                         NOT NULL,
     evaluation_result JSON,
-    -- TODO add custom columns with submission data
+    submission        NCLOB                       NOT NULL,
     CONSTRAINT submission_pk PRIMARY KEY (id),
     CONSTRAINT submission_mode_ck CHECK ("MODE" IN ('run', 'diagnose', 'submit')),
     CONSTRAINT submission_task_fk FOREIGN KEY (task_id) REFERENCES task (id)

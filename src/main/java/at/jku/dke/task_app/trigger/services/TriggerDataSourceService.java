@@ -5,7 +5,6 @@ import at.jku.dke.task_app.trigger.config.TriggerDatasource;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import com.zaxxer.hikari.HikariPoolMXBean;
-import org.apache.commons.lang3.EnumUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.configurationprocessor.json.JSONArray;
@@ -16,7 +15,6 @@ import org.springframework.core.io.ClassPathResource;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.Connection;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
@@ -32,6 +30,8 @@ public class TriggerDataSourceService {
     private final HikariDataSource rootDataSource;
     private final List<TriggerDatasource> submitDatasources;
     private final List<TriggerDatasource> diagnoseDatasources;
+    private final List<HikariConfig> submitConfigs = new ArrayList<>();
+    private final List<HikariConfig> diagnoseConfigs = new ArrayList<>();
     private int submitCounter = 0;
     private int diagnoseCounter = 0;
 
@@ -91,9 +91,11 @@ public class TriggerDataSourceService {
                 userConfig.addDataSourceProperty("ApplicationName", "user-" + username);
                 //add entry to list
                 LOG.info("\"" + username + "\" , \"" + password + "\"");
-                if(username.contains("diagnose")) {
+                if (username.contains("diagnose")) {
+                    this.diagnoseConfigs.add(userConfig);
                     this.diagnoseDatasources.add(new TriggerDatasource(new HikariDataSource(userConfig)));
                 } else {
+                    this.submitConfigs.add(userConfig);
                     this.submitDatasources.add(new TriggerDatasource(new HikariDataSource(userConfig)));
                 }
             }
@@ -111,9 +113,9 @@ public class TriggerDataSourceService {
      */
     public TriggerDatasource getDataSource(boolean diagnose) {
         TriggerDatasource dataSource = null;
-        if(diagnose) {
-            while(dataSource == null) {
-                if(diagnoseDatasources.get(diagnoseCounter).isLock()) {
+        if (diagnose) {
+            while (dataSource == null) {
+                if (diagnoseDatasources.get(diagnoseCounter).isLock()) {
                     diagnoseCounter = (diagnoseCounter + 1) % this.diagnoseDatasources.size();
                 } else {
                     diagnoseDatasources.get(diagnoseCounter).setLock(true);
@@ -122,8 +124,8 @@ public class TriggerDataSourceService {
                 }
             }
         } else {
-            while(dataSource == null) {
-                if(submitDatasources.get(submitCounter).isLock()) {
+            while (dataSource == null) {
+                if (submitDatasources.get(submitCounter).isLock()) {
                     submitCounter = (submitCounter + 1) % this.submitDatasources.size();
                 } else {
                     submitDatasources.get(submitCounter).setLock(true);
@@ -145,65 +147,56 @@ public class TriggerDataSourceService {
     /**
      * Clears the datasource.
      */
-    public void clear(TriggerDatasource dataSource, boolean diagnose, boolean userSubmission) {
-        if(userSubmission) {
-            //Possible difference between clearing a user input and conventionally clearing a schema
-            //purgeSchema();
-            clearSchema(dataSource);
-        } else {
-            clearSchema(dataSource);
+    public void clear(TriggerDatasource dataSource, boolean diagnose) {
+        String userName = dataSource.getDataSource().getUsername();
+        try (Connection conn = this.rootDataSource.getConnection()) {
+            try (Statement statement = conn.createStatement()) {
+                HikariConfig userConfig;
+                if (diagnose) {
+                    userConfig = getUserConfig(diagnoseConfigs, userName);
+                } else {
+                    userConfig = getUserConfig(submitConfigs, userName);
+                }
+                //must close datasource before dropping user to close all connections
+                dataSource.getDataSource().close();
+
+                statement.execute("DROP USER " + userName + " CASCADE");
+                statement.execute("CREATE USER IF NOT EXISTS " + userConfig.getUsername() + " IDENTIFIED BY \"" + userConfig.getPassword() + "\" QUOTA UNLIMITED ON USERS");
+                statement.execute("GRANT CONNECT, RESOURCE, CREATE SESSION, ALTER SESSION, CREATE SEQUENCE, CREATE SYNONYM, CREATE TABLE, CREATE VIEW, CREATE TRIGGER, CREATE PROCEDURE, CREATE TYPE TO " + userName);
+                statement.execute("COMMIT");
+
+                dataSource.setDataSource(new HikariDataSource(userConfig));
+            }
+        } catch (SQLException ex) {
+            LOG.error(("Error when resting datasource {}, {}"), userName, ex.getMessage());
         }
         unlock(dataSource, diagnose);
     }
 
+    private HikariConfig getUserConfig(List<HikariConfig> configs, String userName) {
+        for (HikariConfig config : configs) {
+            if (config.getUsername().equals(userName)) {
+                return config;
+            }
+        }
+        return null;
+    }
+
     private void unlock(TriggerDatasource dataSource, boolean diagnose) {
-        if(diagnose) {
-            for(int i = 0; i < diagnoseDatasources.size(); i++) {
-                TriggerDatasource index = diagnoseDatasources.get(i);
-                if(index == dataSource) {
-                    diagnoseDatasources.get(i).setLock(false);
+        if (diagnose) {
+            for (TriggerDatasource index : diagnoseDatasources) {
+                if (index == dataSource) {
+                    index.setLock(false);
                     return;
                 }
             }
         } else {
-            for(int i = 0; i < submitDatasources.size(); i++) {
-                TriggerDatasource index = submitDatasources.get(i);
-                if(index == dataSource) {
-                    submitDatasources.get(i).setLock(false);
+            for (TriggerDatasource index : submitDatasources) {
+                if (index == dataSource) {
+                    index.setLock(false);
                     return;
                 }
             }
         }
-    }
-
-    /**
-     * Clears schema, only for use after solution execution
-     */
-    private void clearSchema(TriggerDatasource dataSource) {
-        try (Connection conn = dataSource.getDataSource().getConnection()) {
-            try (Statement statement = conn.createStatement()) {
-                ResultSet rs = statement.executeQuery("SELECT table_name FROM user_tables");
-                List<String> tableNames = new ArrayList<>();
-                while (rs.next()) {
-                    String tableName = rs.getString("table_name");
-                    if (!EnumUtils.isValidEnum(DefaultTables.class, tableName)) {
-                        tableNames.add(tableName);
-                    }
-                }
-                for (String tableName : tableNames) {
-                    statement.execute("DROP TABLE " + tableName + " CASCADE CONSTRAINTS");
-                }
-                statement.execute("COMMIT");
-            }
-        } catch (SQLException ex) {
-            LOG.error("SQL exception when cleaning schema", ex);
-        }
-    }
-
-    /**
-     * Purges schema, recommended for use after user execution
-     */
-    private void purgeSchema() {
-        //TODO: purge schema with all possible user modifications
     }
 }

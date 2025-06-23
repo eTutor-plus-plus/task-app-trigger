@@ -10,12 +10,14 @@ import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfi
 import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.core.env.Environment;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * The main class of the application.
  */
 @SpringBootApplication(exclude = {SecurityAutoConfiguration.class, UserDetailsServiceAutoConfiguration.class})
 @ConfigurationPropertiesScan(basePackageClasses = JdbcConnectionParameters.class)
+@EnableScheduling
 public class TaskAppApplication {
 
     private static final Logger LOG = LoggerFactory.getLogger(TaskAppApplication.class);
