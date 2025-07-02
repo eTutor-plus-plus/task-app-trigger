@@ -47,7 +47,7 @@ public class TriggerAnalyzer {
         this.mode = submission.mode().name();
         //assume the comparison is correct until proven otherwise
         this.bodyPenalty = false;
-        this.syntaxPenalty = false;
+        this.syntaxPenalty = executionResult.isSyntaxError();
     }
 
     public TriggerAnalyzer(SubmitSubmissionDto<TriggerSubmissionDto> submission, MessageSource messageSource, List<Snapshot> taskSubmissionExecution, BigDecimal maxPoints, ExecutionResult executionResult, TriggerHeadEvaluation triggerHeadEvaluation) {
@@ -58,7 +58,6 @@ public class TriggerAnalyzer {
     public void analyze() {
         this.criterionDtos.putAll(triggerHeadEvaluation.getCriterionDtos());
         this.headerPenalty = triggerHeadEvaluation.isHeadPenalty();
-        this.syntaxPenalty = executionResult.isSyntaxError();
 
         //if either the syntax is wrong or the head is incorrect, always fail the comparison
         if (syntaxPenalty || headerPenalty) {
@@ -103,7 +102,7 @@ public class TriggerAnalyzer {
         }
     }
 
-    private void buildResultTables() {
+    public void buildResultTables() {
         for(String table : executionResult.getModifiedStates().keySet()) {
             StringBuilder sb = new StringBuilder("<div style=\"display: inline-block; vertical-align: top; margin-right: 20px;\"> ");
             sb.append(messageSource.getMessage("tableInitialState", new Object[]{table}, locale));
@@ -164,34 +163,43 @@ public class TriggerAnalyzer {
         //no feedback for the lowest level
         this.generalFeedBack.put(0, "");
 
-        //execution was not correct in any way
-        if (syntaxPenalty || bodyPenalty || headerPenalty) {
-            generalFeedBack.put(1, this.messageSource.getMessage("incorrect", null, this.locale));
-
-            //the actual comparison was not correct
-            if(bodyPenalty) {
-                generalFeedBack.put(2, this.messageSource.getMessage("wrongTriggerBody", null, locale));
-            }
-
-            //the trigger head was no correct
-            if (headerPenalty) {
-                generalFeedBack.put(2, this.messageSource.getMessage("criteria.triggerHeadNotOk", null, this.locale));
-            }
-
-            //the syntax was not correct
+        if (mode.equals("RUN")) {
             if (syntaxPenalty) {
-                generalFeedBack.put(2, this.messageSource.getMessage("syntaxError", null, locale) + "\n" + executionResult.getExecutionMessage());
-                //the syntax was not correct, but head generally was --> more detailed result for higher feedback
-                if (!headerPenalty) {
-                    generalFeedBack.put(3, this.messageSource.getMessage("headOkSyntaxError", null, locale) + "\n" + executionResult.getExecutionMessage());
-                }
+                generalFeedBack.put(2, this.messageSource.getMessage("syntaxError", null, locale));
+            } else {
+                generalFeedBack.put(1, this.messageSource.getMessage("noSyntaxError", null, locale));
             }
         } else {
-            //execution comparison was successful, finally distinguish between submission modes
-            if (mode.equals("DIAGNOSE")) {
-                generalFeedBack.put(1, this.messageSource.getMessage("possiblyCorrect", null, locale));
+            //execution was not correct in any way
+            if (syntaxPenalty || bodyPenalty || headerPenalty) {
+                generalFeedBack.put(1, this.messageSource.getMessage("incorrect", null, this.locale));
+
+                //the actual comparison was not correct
+                if (bodyPenalty) {
+                    generalFeedBack.put(2, this.messageSource.getMessage("wrongTriggerBody", null, locale));
+                }
+
+                //the trigger head was no correct
+                if (headerPenalty) {
+                    generalFeedBack.put(2, this.messageSource.getMessage("criteria.triggerHeadNotOk", null, this.locale));
+                }
+
+                //the syntax was not correct
+                if (syntaxPenalty) {
+
+                    generalFeedBack.put(2, this.messageSource.getMessage("syntaxError", null, locale) + "\n" + executionResult.getExecutionMessage());
+                    //the syntax was not correct, but head generally was --> more detailed result for higher feedback
+                    if (!headerPenalty) {
+                        generalFeedBack.put(3, this.messageSource.getMessage("headOkSyntaxError", null, locale) + "\n" + executionResult.getExecutionMessage());
+                    }
+                }
             } else {
-                generalFeedBack.put(1, this.messageSource.getMessage("correct", null, locale));
+                //execution comparison was successful, finally distinguish between submission modes
+                if (mode.equals("DIAGNOSE")) {
+                    generalFeedBack.put(1, this.messageSource.getMessage("possiblyCorrect", null, locale));
+                } else {
+                    generalFeedBack.put(1, this.messageSource.getMessage("correct", null, locale));
+                }
             }
         }
 

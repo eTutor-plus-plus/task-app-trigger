@@ -74,8 +74,18 @@ public class EvaluationService {
         TriggerHeadEvaluation triggerHeadEvaluation;
         switch (mode){
             case "RUN":
-                //execute trigger to check syntax
+                //execute trigger
                 executionResult = triggerExecutionService.executeUserSubmission(task, submission, true);
+                //analyze trigger execution
+                triggerAnalyzer = new TriggerAnalyzer(submission, messageSource, taskSolutionExecution, task.getMaxPoints(), executionResult, null);
+                if (executionResult.isSuccessful()) {
+                    triggerAnalyzer.buildResultTables();
+                }
+                //generate feedback
+                generalFeedback = triggerAnalyzer.getGeneralFeedback();
+                criterionDtoList = triggerAnalyzer.getCriteria();
+                break;
+                /*
                 // return syntax error if present
                 if (!executionResult.isSyntaxError()) {
                     generalFeedback = messageSource.getMessage("noSyntaxError", null, locale);
@@ -96,6 +106,7 @@ public class EvaluationService {
                     ));
                 }
                 break;
+                */
             case "DIAGNOSE":
                 if (task.isBuffered()) {
                     //check if execution is already present
