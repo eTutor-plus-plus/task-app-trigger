@@ -59,8 +59,8 @@ public class TriggerAnalyzer {
         this.criterionDtos.putAll(triggerHeadEvaluation.getCriterionDtos());
         this.headerPenalty = triggerHeadEvaluation.isHeadPenalty();
 
-        //if either the syntax is wrong or the head is incorrect, always fail the comparison
-        if (syntaxPenalty || headerPenalty) {
+        //if the syntax is incorrect, always fail the comparison
+        if (syntaxPenalty) {
             bodyPenalty = true;
         }
 
@@ -112,7 +112,7 @@ public class TriggerAnalyzer {
             sb.append(createTable(executionResult.getTableHeaders().get(table), executionResult.getModifiedStates().get(table)));
             sb.append(" </div>");
 
-            addCriteria(table, null, true, sb.toString(), 1);
+            addCriteria(table, null, true, sb.toString(), 0);
         }
     }
 
@@ -216,11 +216,11 @@ public class TriggerAnalyzer {
         if (syntaxPenalty) {
             String name = this.messageSource.getMessage("criterium.syntax", null, locale);
             String criteria = this.messageSource.getMessage("criterium.syntax.invalid", null, locale);
-            addCriteria(name, null, false, criteria, 1);
+            addCriteria(name, null, false, criteria, 0);
         } else {
             String name = this.messageSource.getMessage("criterium.syntax", null, locale);
             String criteria = this.messageSource.getMessage("criterium.syntax.valid", null, locale);
-            addCriteria(name, null, true, criteria, 1);
+            addCriteria(name, null, true, criteria, 0);
         }
         if (bodyPenalty) {
             String name = this.messageSource.getMessage("criteria.triggerBody", null, locale);
@@ -268,7 +268,7 @@ public class TriggerAnalyzer {
                 //minimal points can be zero
                 this.points = BigDecimal.ZERO;
         }
-        if(this.feedBackLevel > 0) {
+        if(this.feedBackLevel >= 0) {
             return this.points;
         } else {
             return null;

@@ -84,29 +84,8 @@ public class EvaluationService {
                 //generate feedback
                 generalFeedback = triggerAnalyzer.getGeneralFeedback();
                 criterionDtoList = triggerAnalyzer.getCriteria();
+                points = BigDecimal.ZERO;
                 break;
-                /*
-                // return syntax error if present
-                if (!executionResult.isSyntaxError()) {
-                    generalFeedback = messageSource.getMessage("noSyntaxError", null, locale);
-                    criterionDtoList.add( new CriterionDto(
-                        messageSource.getMessage("criterium.syntax", null, locale),
-                        null,
-                        true,
-                        messageSource.getMessage("criterium.syntax.valid",  null, locale)
-                    ));
-                } else {
-                    generalFeedback = messageSource.getMessage("syntaxError", null, locale);
-                    generalFeedback = generalFeedback + "\n" + executionResult.getExecutionMessage();
-                    criterionDtoList.add( new CriterionDto(
-                        messageSource.getMessage("criterium.syntax", null, locale),
-                        null,
-                        false,
-                        messageSource.getMessage("criterium.syntax.invalid",  null, locale)
-                    ));
-                }
-                break;
-                */
             case "DIAGNOSE":
                 if (task.isBuffered()) {
                     //check if execution is already present

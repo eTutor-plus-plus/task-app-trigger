@@ -1,5 +1,6 @@
 package at.jku.dke.task_app.trigger.services;
 
+import at.jku.dke.etutor.task_app.data.entities.TaskGroup;
 import at.jku.dke.etutor.task_app.dto.SubmitSubmissionDto;
 import at.jku.dke.task_app.trigger.config.TriggerDatasource;
 import at.jku.dke.task_app.trigger.data.entities.TriggerTask;
@@ -118,6 +119,43 @@ public class TriggerExecutionService {
             dataSource.clear(triggerDatasource, true);
         }
         return null;
+    }
+
+    public ExecutionResult validateTaskGroup(String ddlStm, String initStm, boolean diagnose) {
+        ExecutionResult result = new ExecutionResult();
+        TriggerDatasource triggerDatasource = this.dataSource.getDataSource(diagnose);
+        HikariDataSource hikariDataSource = triggerDatasource.getDataSource();
+        try (Connection conn = hikariDataSource.getConnection()) {
+            try (Statement statement = conn.createStatement()) {
+                //Build schema
+                String ddlStatements = ddlStm.strip();
+                for (String ddlStatement : ddlStatements.split(";")) {
+                    statement.execute(ddlStatement);
+                }
+                statement.execute("COMMIT");
+
+                //Run schema init statements
+                String initStatements = initStm.strip();
+                for (String diagnoseStatement : initStatements.split(";")) {
+                    statement.execute(diagnoseStatement);
+                }
+                statement.execute("COMMIT");
+
+                dataSource.clear(triggerDatasource, diagnose);
+                result = new ExecutionResult(true, false, "", null, null, null, null);
+            }
+        } catch (SQLException ex) {
+            LOG.error("Error when executing the trigger {}", ex.getMessage());
+
+            // Check if the exception is a syntax error, starting with "42"
+            String sqlState = ex.getSQLState();
+            boolean isSyntaxError = sqlState != null && sqlState.startsWith("42");
+
+            // firmly clear the database, possible malicious user execution caused an error
+            dataSource.clear(triggerDatasource, diagnose);
+            result = new ExecutionResult(false, isSyntaxError, ex.getMessage(), null, null, null, null);
+        }
+        return result;
     }
 
     public ExecutionResult executeTask(TriggerTask task, boolean diagnose) {
