@@ -25,8 +25,10 @@ public class TaskGroupController extends BaseTaskGroupController<TriggerTaskGrou
 
     @Override
     protected TriggerTaskGroupDto mapToDto(TriggerTaskGroup taskGroup) {
-        // TODO: return new TriggerTaskGroupDto(taskGroup.getMinNumber(), taskGroup.getMaxNumber());
-        throw new NotImplementedException();
+        return  new TriggerTaskGroupDto(
+            taskGroup.getDdlStatements(),
+            taskGroup.getDiagnoseDmlStatements(),
+            taskGroup.getSubmitDmlStatements()
+        );
     }
-
 }

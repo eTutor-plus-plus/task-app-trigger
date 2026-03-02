@@ -1,0 +1,82 @@
+[
+    {
+        "username": "diagnose1",
+        "password": "diagnose1-secret",
+        "max-pool-size": 5,
+        "max-lifetime": 1800000,
+        "connection-timeout": 15000,
+        "jdbcUrl": "jdbc:oracle:thin:@//localhost:1521/FREEPDB1"
+    },
+    {
+        "username": "diagnose2",
+        "password": "diagnose2-secret",
+        "max-pool-size": 5,
+        "max-lifetime": 1800000,
+        "connection-timeout": 15000,
+        "jdbcUrl": "jdbc:oracle:thin:@//localhost:1521/FREEPDB1"
+    },
+    {
+        "username": "diagnose3",
+        "password": "diagnose3-secret",
+        "max-pool-size": 5,
+        "max-lifetime": 1800000,
+        "connection-timeout": 15000,
+        "jdbcUrl": "jdbc:oracle:thin:@//localhost:1521/FREEPDB1"
+    },
+    {
+        "username": "diagnose4",
+        "password": "diagnose4-secret",
+        "max-pool-size": 5,
+        "max-lifetime": 1800000,
+        "connection-timeout": 15000,
+        "jdbcUrl": "jdbc:oracle:thin:@//localhost:1521/FREEPDB1"
+    },
+    {
+        "username": "diagnose5",
+        "password": "diagnose5-secret",
+        "max-pool-size": 5,
+        "max-lifetime": 1800000,
+        "connection-timeout": 15000,
+        "jdbcUrl": "jdbc:oracle:thin:@//localhost:1521/FREEPDB1"
+    },
+    {
+        "username": "submit1",
+        "password": "submit1-secret",
+        "max-pool-size": 5,
+        "max-lifetime": 1800000,
+        "connection-timeout": 15000,
+        "jdbcUrl": "jdbc:oracle:thin:@//localhost:1521/FREEPDB1"
+    },
+    {
+        "username": "submit2",
+        "password": "submit2-secret",
+        "max-pool-size": 5,
+        "max-lifetime": 1800000,
+        "connection-timeout": 15000,
+        "jdbcUrl": "jdbc:oracle:thin:@//localhost:1521/FREEPDB1"
+    },
+    {
+        "username": "submit3",
+        "password": "submit3-secret",
+        "max-pool-size": 5,
+        "max-lifetime": 1800000,
+        "connection-timeout": 15000,
+        "jdbcUrl": "jdbc:oracle:thin:@//localhost:1521/FREEPDB1"
+    },
+    {
+        "username": "submit4",
+        "password": "submit4-secret",
+        "max-pool-size": 5,
+        "max-lifetime": 1800000,
+        "connection-timeout": 15000,
+        "jdbcUrl": "jdbc:oracle:thin:@//localhost:1521/FREEPDB1"
+    },
+    {
+        "username": "submit5",
+        "password": "submit5-secret",
+        "max-pool-size": 5,
+        "max-lifetime": 1800000,
+        "connection-timeout": 15000,
+        "jdbcUrl": "jdbc:oracle:thin:@//localhost:1521/FREEPDB1"
+    }
+]
