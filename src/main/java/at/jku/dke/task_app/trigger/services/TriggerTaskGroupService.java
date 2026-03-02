@@ -3,11 +3,13 @@ package at.jku.dke.task_app.trigger.services;
 import at.jku.dke.etutor.task_app.dto.ModifyTaskGroupDto;
 import at.jku.dke.etutor.task_app.dto.TaskGroupModificationResponseDto;
 import at.jku.dke.etutor.task_app.services.BaseTaskGroupService;
+import at.jku.dke.task_app.trigger.data.entities.TriggerTask;
 import at.jku.dke.task_app.trigger.data.entities.TriggerTaskGroup;
 import at.jku.dke.task_app.trigger.data.repositories.TriggerTaskGroupRepository;
 import at.jku.dke.task_app.trigger.dto.ModifyTriggerTaskGroupDto;
 import at.jku.dke.task_app.trigger.dto.SchemaInfoDto;
 import at.jku.dke.task_app.trigger.dto.TableDto;
+import at.jku.dke.task_app.trigger.evaluation.ExecutionResult;
 import at.jku.dke.task_app.trigger.evaluation.Snapshot.BufferedSnapshots;
 import jakarta.validation.ValidationException;
 import org.apache.logging.log4j.util.TriConsumer;
@@ -16,9 +18,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.MessageSource;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.Trigger;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.Locale;
 
@@ -140,6 +144,26 @@ public class TriggerTaskGroupService extends BaseTaskGroupService<TriggerTaskGro
         taskGroup.setDiagnoseDmlStatements(modifyTaskGroupDto.additionalData().diagnoseDmlStatements());
         taskGroup.setSubmitDmlStatements(modifyTaskGroupDto.additionalData().submitDmlStatements());
         TriggerExecutionService triggerExecutionService = new TriggerExecutionService(this.triggerDataSourceService);
+        ExecutionResult submit = triggerExecutionService.validateTaskGroup(taskGroup.getDdlStatements(), taskGroup.getSubmitDmlStatements(), false);
+        ExecutionResult diagnose = triggerExecutionService.validateTaskGroup(taskGroup.getDdlStatements(), taskGroup.getDiagnoseDmlStatements(), true);
+        if (!submit.isSuccessful()) {
+            if (submit.isSyntaxError())
+            {
+                throw new ValidationException("DDL statements or submission statements contain a syntax error. Error message: " + submit.getExecutionMessage());
+            } else {
+                throw new ValidationException("DDL statements or submission statements not valid. Error message: " + submit.getExecutionMessage());
+            }
+        }
+        if (!diagnose.isSuccessful()) {
+            if (diagnose.isSyntaxError())
+            {
+                throw new ValidationException("DDL statements or diagnose statements contain a syntax error. Error message: " + diagnose.getExecutionMessage());
+            } else {
+                throw new ValidationException("DDL statements or diagnose statements not valid. Error message: " + diagnose.getExecutionMessage());
+            }
+        }
+        //triggerExecutionService.
+            //TODO: fix
         SchemaInfoDto result = triggerExecutionService.getSchemaInfo(taskGroup.getDdlStatements());
         taskGroup.setSchemaDescription(result);
         this.repository.save(taskGroup);
